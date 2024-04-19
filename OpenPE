@@ -1,0 +1,149 @@
+' Title:      This VB-Script Opens a Project in the PCAN-Explorer Transmit List
+' Developer:  Aakash Borse
+' Version:    1.0.0.1
+'-----------------------------------------------------------------------------
+
+Option Explicit
+
+' Constants from PCAN-Explorer Type Library, see also Constants.vbs in
+' PCAN-Explorer Samples\VBScript directory
+const peSaveChangesNo = 2
+
+
+' Create and show the PCAN-Explorer application
+Dim app
+Set app = CreateObject("PCANExplorer6.Application")
+app.MainWindow.IsVisible = True
+
+
+' Open the project
+app.Documents.Open "$(MyDocsDir)\PCAN-Explorer 6\Projects\CT-Lite.peproj"
+
+
+' Setup the connection to PEAK hardware
+Dim MyConnection
+  Set MyConnection = app.Connections.Add("Aakash@pcan_virtual")
+  MyConnection.IsEnabled = True
+  If Not MyConnection.IsEnabled Then
+    MsgBox "Error while enabling the connection!",,WScript.ScriptName
+    app.ActiveWindow.Kind = peDocumentKindTrace 
+    app.ActiveWindow.Object.Tracer.Start
+    app.ActiveProject.Close peSaveChangesNo
+    app.Quit
+    WScript.Quit
+  End If
+app.ExecuteCommand "ShowReceiveTransmit"
+app.ExecuteCommand "TraceStartNew"
+
+
+'##############################################################################################
+' Create a new cyclic transmit message
+
+' FETs enagege
+' Send IPC and DCU ACK
+' Check FETs
+const peDocumentKindPlotter = "{31191CEB-5D42-4D0B-944D-5DC876238C35}"
+const peProjectItemKindSignals = "{BD40383E-4B7E-450f-95F5-29DBCEFC83A0}"
+const peProjectItemKindSignal = "{BD40383F-4B7E-450f-95F5-29DBCEFC83A0}"
+Dim doc, plotter, myChannel, scene
+   'Set doc = app.Documents.Open("$(DefSymDir)\Sample.sym")
+   app.Documents.Open "$(MyDocsDir)\PCAN-Explorer 6\Symbols\Sample.sym"
+   app.ExecuteCommand "FileApply"
+   Set doc = app.Documents.Add(peDocumentKindPlotter)
+   'app.Documents.Add peDocumentKindPlotter
+   Set plotter = app.ActiveWindow.Object
+   'Set scene = doc.ActiveWindow.Object.ProjectItem
+   'Set xyz = scene.
+   'Set plotter.Signal = Signals("Speed")
+   plotter.Start
+
+
+Dim Discharge_IGN_Request
+  Set Discharge_IGN_Request = app.Connections.TransmitMessages.Add
+  With Discharge_IGN_Request
+    .BeginUpdate
+    Set .Connection = MyConnection 
+    .ID = &H1840F4D0
+    .DataLength = 7
+    .Data(0) = &H00
+    .Data(1) = &H00
+    .Data(2) = &H00
+    .Data(3) = &H00
+    .Data(4) = &H00
+    .Data(5) = &H01
+    .Data(6) = &H00
+    .CycleTime = 10
+    .Creator = "Aakash"
+    .EndUpdate
+  End With
+  While Discharge_IGN_Request.EventCount < 100
+    WScript.Sleep 50
+  Wend
+  For Each Discharge_IGN_Request In app.Connections.TransmitMessages
+    Discharge_IGN_Request.IsPaused = True
+  Next
+
+
+Dim IPC_ACK
+  Set IPC_ACK = app.Connections.TransmitMessages.Add
+  With IPC_ACK
+    .BeginUpdate
+    Set .Connection = MyConnection
+    .ID = &H310
+    .DLC = 8
+    .Data(0) = &H00
+    .Data(1) = &H00
+    .Data(2) = &H00
+    .Data(3) = &H06
+    .Data(4) = &H00
+    .Data(5) = &H00
+    .Data(6) = &H00
+    .Data(7) = &H00
+    .CycleTime = 100
+    .Creator = "Aakash"
+    .EndUpdate
+  End With
+  ' Wait until the message was sent 100 times
+  While IPC_ACK.EventCount < 100
+    WScript.Sleep 50
+  Wend
+  For Each IPC_ACK In app.Connections.TransmitMessages
+    IPC_ACK.IsPaused = True
+  Next
+
+
+Dim DCU_ACK
+  Set DCU_ACK = app.Connections.TransmitMessages.Add
+  With DCU_ACK
+    .BeginUpdate
+    Set .Connection = MyConnection
+    .ID = &H200
+    .DLC = 8
+    .Data(0) = &H00
+    .Data(1) = &H00
+    .Data(2) = &H00
+    .Data(3) = &H00
+    .Data(4) = &H00
+    .Data(5) = &H00
+    .Data(6) = &H00
+    .Data(7) = &H0B
+    .CycleTime = 100
+    .Creator = "Aakash"
+    .EndUpdate
+  End With
+  ' Wait until the message was sent 100 times
+  While DCU_ACK.EventCount < 100
+    WScript.Sleep 50
+  Wend
+  For Each DCU_ACK In app.Connections.TransmitMessages
+    DCU_ACK.IsPaused = True
+  Next
+
+
+
+' Cleanup
+Dim result
+result = app.ActiveDocument.Save("C:\Users\MAXWELL\Desktop\Test Report\Shutdown.trc")
+
+app.ActiveProject.Close peSaveChangesNo
+app.Quit
